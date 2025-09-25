@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Таблица Шульте</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            color: #333;
+        }
+        #game-container {
+            text-align: center;
+            position: relative; /* Для позиционирования кнопки "Начать заново" */
+        }
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(5, 60px);
+            gap: 5px;
+            margin: 20px auto;
+            transition: opacity 0.5s;
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            background-color: #fff;
+            border: 2px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .cell:hover {
+            background-color: #e0e0e0;
+        }
+        .correct {
+            background-color: #90EE90;
+        }
+        .wrong {
+            background-color: #FF6347;
+        }
+        #timer {
+            font-size: 20px;
+            margin: 10px 0;
+        }
+        #message {
+            font-size: 18px;
+            margin: 10px 0;
+        }
+        #start {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: transparent;
+            color: #0088cc;
+            border: 2px solid #0088cc;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        #restart {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: transparent;
+            color: #0088cc;
+            border: 2px solid #0088cc;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+            position: absolute;
+            top: 65%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        #start:hover {
+            background-color: #0088cc;
+            color: white;
+        }
+        #restart:hover {
+            background-color: #0088cc;
+            color: white;
+        }
+        #best-time {
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        .transparent {
+            opacity: 0.3;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>Таблица Шульте</h1>
+        <div id="timer">Время: 0 сек</div>
+        <div id="best-time">Лучшее время: -</div>
+        <div id="message">Нажмите "Начать"</div>
+        <button id="start">Начать</button>
+        <button id="restart" class="hidden">Начать заново</button>
+        <div id="grid" class="hidden"></div>
+    </div>
+    <script>
+        // Инициализация Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // Логика игры
+        let currentNumber = 1;
+        let startTime;
+        let timerInterval;
+        let numbers = Array.from({ length: 25 }, (_, i) => i + 1);
+        const grid = document.getElementById('grid');
+        const message = document.getElementById('message');
+        const startButton = document.getElementById('start');
+        const restartButton = document.getElementById('restart');
+        const bestTimeDisplay = document.getElementById('best-time');
+
+        // Загрузка лучшего времени из localStorage
+        let bestTime = localStorage.getItem('schulteBestTime') || null;
+        if (bestTime) {
+            bestTimeDisplay.textContent = `Лучшее время: ${parseFloat(bestTime).toFixed(2)} сек`;
+        }
+
+        // Функция для перемешивания массива
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // Создание таблицы
+        function createGrid() {
+            grid.innerHTML = '';
+            shuffle(numbers);
+            numbers.forEach(number => {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.textContent = number;
+                cell.addEventListener('click', () => handleCellClick(number, cell));
+                grid.appendChild(cell);
+            });
+        }
+
+        // Обработка клика по ячейке
+        function handleCellClick(number, cell) {
+            if (number === currentNumber) {
+                cell.classList.add('correct');
+                currentNumber++;
+                message.textContent = `Найдите число: ${currentNumber}`;
+                if (currentNumber > 25) {
+                    clearInterval(timerInterval);
+                    const timeTaken = ((Date.now() - startTime) / 1000).toFixed(2);
+                    message.textContent = `Победа! Время: ${timeTaken} сек`;
+                    grid.classList.add('transparent');
+                    restartButton.classList.remove('hidden');
+                    if (!bestTime || timeTaken < bestTime) {
+                        bestTime = timeTaken;
+                        localStorage.setItem('schulteBestTime', timeTaken);
+                        bestTimeDisplay.textContent = `Лучшее время: ${timeTaken} сек`;
+                    }
+                    tg.sendData(JSON.stringify({ time: timeTaken }));
+                }
+            } else {
+                cell.classList.add('wrong');
+                setTimeout(() => cell.classList.remove('wrong'), 500);
+            }
+        }
+
+        // Обновление таймера
+        function updateTimer() {
+            const timeElapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+            document.getElementById('timer').textContent = `Время: ${timeElapsed} сек`;
+        }
+
+        // Запуск игры
+        function startGame() {
+            currentNumber = 1;
+            startTime = Date.now();
+            message.textContent = `Найдите число: ${currentNumber}`;
+            startButton.classList.add('hidden');
+            grid.classList.remove('hidden', 'transparent');
+            restartButton.classList.add('hidden');
+            createGrid();
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 100);
+        }
+
+        // Обработчики событий
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+
+        // Закрытие приложения
+        tg.MainButton.setText('Закрыть').show().onClick(() => {
+            tg.close();
+        });
+    </script>
+</body>
+</html>
